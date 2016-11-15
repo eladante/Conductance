@@ -1,0 +1,49 @@
+---
+title: "Canopy conductance"
+author: "Elad Dente"
+date: "15 בנובמבר 2016"
+output: html_document
+---
+
+## The canopy conductance function, including Jarvis model parameters and LAI
+
+Kc (canopy conductance)= Kleaf (Jarvis model. function of cleaf_max,Rnrad,Rvpd,RT and RTeta) * LAI
+The R in Jarvis parameters is for "relative". the values can be taken from the plots in "Physical Hydrology: Third Edition" by S. Lawrence Dingman
+(p. 282)
+Default values for the relative parameters are set to Rnrad=0.7, Rvpd=0.6, RT=0.8, Rteta=0.7
+You can use this model to test the influence of Cleaf_max and LAI parameters on the canopy conductance (m/s).
+The Kc values can be used in Penman-Montieth model.
+
+```{r}
+# The canopy_conductance function:
+canopy_conductance=
+  function(Cleaf_max, Rnrad=0.7, Rvpd=0.6, RT=0.8, Rteta=0.7, LAI) {
+
+    #claculating Kc
+    Kc = (Cleaf_max*Rnrad*Rvpd*RT*Rteta*LAI)
+    
+    #return Kc
+    return(Kc)
+  }
+```
+
+
+## Example: LAI influence analysis (while Cleaf_max=100)
+```{r}
+#typical LAI values:
+LAI_i=c(1,5,10,20,30,40,50);
+#Calculating Kc for differnt LAI values:
+Kc_res=matrix(,nrow = length(LAI_i), ncol = 1);
+for (i in 1:length(LAI_i)){
+    Kc_res[i,1]<-(canopy_conductance(Cleaf_max = 100, LAI=LAI_i[i]));
+  }
+
+```
+
+### plot
+```{r echo=FALSE}
+plot(LAI_i,Kc_res,main="canopy conductance VS LAI", xlab="LAI (m^2/m^2)", ylab="Kc (m/s)")
+
+```
+
+__As it can be easily seen from the model function and the plot, there is a linear relationship between a Kc and LAI. Thus, as more leaves in a given area, the higher canopy conductance you get _(!)_.__
