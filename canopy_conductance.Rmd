@@ -1,6 +1,6 @@
 ---
 title: "Canopy conductance"
-author: "Elad Dente"
+author: "Yair Rinat""
 date: "15 בנובמבר 2016"
 output: html_document
 ---
