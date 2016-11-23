@@ -1,0 +1,446 @@
+---
+title: "Physical based SCS method"
+author: "Elad Dente"
+output: html_document
+---
+
+# Model package objective:
+
+
+__This functions package objective is to calculate the "intial abstraction" (I) paramter of the SCS method, based on pysical ecoh-hydraulic parameters (rather than the estimation with Curve Number (CN) in the original method.__
+__The "S"" parameter is still calculated with the CN. the next versions of this package will calculate the S upun the I, after calibration.__
+
+This package include:
+
+1. Atmospheric conductance model
+
+2. canopy conductance model
+
+3. Penamn-Montieth model
+
+4. Interception model
+
+5. SCS method model
+
+__General gross-assumptions:__
+
+1. Evaporation in the interception model is the evapotranspiration of penman-montieth model.
+
+2. Initial abstraction of the SCS is the interception model output (not including other abstraction other then the trees).
+
+## The canopy conductance function, including Jarvis model parameters and LAI
+
+Canopy conductance (Kc; mm/s)= (Jarvis model output (Jarvis_c) * maximum stomatal conuctance (Cleaf_max) * LAI. Shelter factor assumed to be 1.
+Jarvis_c is function of Rnrad, Rvpd, RT and RTeta.
+The R in Jarvis parameters is for "relative". the values can be taken from the plots and equations in "Physical Hydrology: Third Edition" by S. Lawrence Dingman (p. 282).
+Default values were set the Eilon example (see below).
+The Kc values can be used in Penman-Montieth model (see below).
+
+The Canopy Conductance Model code:
+```{r}
+#' Canopy Conductance Model
+#' 
+#' The R in Jarvis parameters is for "relative". the valus can be taken from the plots in "Physical Hydrology: Third Edition" by S. Lawrence Dingman (p. 282)
+#Default values for Quercus ilex (oaks) and Mediterranian sclerophyllous where taken from
+#Schulze, E. D., Kelliher, F. M., Korner, C., Lloyd, J., & Leuning, R. (1994). Relationships among maximum stomatal #conductance, ecosystem surface conductance, carbon assimilation rate, and plant nitrogen nutrition: a global ecology #scaling exercise. Annual Review of Ecology and Systematics, 629-660.
+#and
+#Limousin, J. M., Rambal, S., Ourcival, J. M., & Joffre, R. (2008). Modelling rainfall interception in a Mediterranean #Quercus ilex ecosystem: lesson from a throughfall exclusion experiment. Journal of Hydrology, 357(1), 57-66. 
+
+
+
+#' @param T (deg c) air temperature at measured height above ground (0>T<40 deg C).
+#' @usage calculate canopy conductance, based on the Jarvis model. To be used in Penman-Montieth ET model.
+#' @usage will be added
+#' @author Elad Dente
+#' @return Jarvis model coefficient (Jarvis_c), RT, and canopy conductance (Kc, mm/s)
+
+canopy_conductance<-
+  function(Cleaf_max=4.8, Rnrad, Rvpd=0.85,T, Rteta, LAI=1.61) {
+    
+    #       Internal Variables
+    #       RT  (-) from  T, based on Stewart (1988) relationsip). 
+    
+    #RT from T
+    RT=(T*(40-T)^1.18)/691
+    
+    #claculating Jc
+    Jarvis_c = (Cleaf_max*Rnrad*Rvpd*RT*Rteta)
+    
+    #claculating Kc
+    Kc = (Jarvis_c*LAI)
+    
+    #return Kc
+    return(list(Jarvis_coefficient=Jarvis_c, Temperature_effect=RT, Canopy_conductance_mm.s=Kc))
+  }
+```
+
+## Example of sensitivity analysis (Kc Vs. T)
+```{r}
+#typical T values:
+T_i=c(1,5,10,15,20,25,30,35,39);
+#Calculating Kc for differnt T_i values:
+Kc_res=matrix(,nrow = length(T_i), ncol = 1);
+for (i in 1:length(T_i)){
+    a<-(canopy_conductance(Rnrad=0.5, T = T_i[i],Rteta=1));
+    Kc_res[i,1]=a$Canopy_conductance_mm.s
+  }
+
+```
+
+### Kc Vs. T plot
+```{r echo=FALSE}
+plot(T_i,Kc_res,main="canopy conductance VS Temperature", xlab="T (deg C)", ylab="Kc (mm/s)")
+
+```
+
+## Atmospheric conductance model
+Based on eq.6.48 (p. 278) in "Physical Hydrology: Third Edition" by S. Lawrence Dingman
+This model gives estimation of the atmospheric conductance (Ca) based on the 
+wind velocity (at 2m above ground, 'windspeed') and vegetation height ('z_veg')
+```{r}
+
+
+#' Atmospheric conductance model
+#' 
+#' Based on eq.6.48 (p. 278) in "Physical Hydrology: Third Edition" by S. Lawrence Dingman
+#' This model gives estimation of the atmospheric conductance (Ca) based on the 
+#' wind velocity (at 2m above ground, 'windspeed') and vegetation height ('z_veg')
+#' 
+#' @param   windspeed (cm/s) at 2m above ground 
+#' @param   z_veg (cm), height of vegetation above ground
+#' @usage calculate atmospheric conductance to be used in Penman-Montieth ET model.
+#' @author Elad Dente
+#' @return zd, z0, zm (all in cm), and atmospheric conductance (cm/s)
+
+atmo_conductance <-
+function(windspeed, z_veg) {
+    #       Internal Variables
+    #
+    #       Zd     (cm)    zero-plan displacement height
+    #       z0    (cm)     roughness height
+    #       zm      (cm)      measurement_height
+    
+    #zd from Z_veg
+    zd = 0.7*z_veg
+    
+    #z0 from z_veg
+    z0 = 0.1*z_veg
+    
+    #zm from z_veg
+    zm = (z_veg +200)
+     
+    #claculating Ca
+    Ca = (windspeed/(6.25*(log((zm-zd)/z0))^2))
+    
+    #return Ca
+    return(list(displacement_height=zd, roughness_height=z0, measurement_height=zm, atmospheric_conductance_cm.s=Ca))
+  }
+
+
+```
+### Sensitivity analysis
+Plot of the Ca (atmospheric conductance) Vs. U (wind speed at 2m above canopy) and Z_veg (vegetation height):
+```{r}
+u=seq(10,1000);
+z=c(10,20,50,100,200,500,1000,2000);
+atmo_res=matrix(,nrow = length(u), ncol = length(z));
+for (i in 1:length(u)){
+  for (j in 1:length(z)){
+    x<-(atmo_conductance(u[i],z[j]));
+    atmo_res[i,j]=x$atmospheric_conductance_cm.s
+  }
+}
+matplot(atmo_res, type = c("b"),pch=1,col = 1:8,
+        main="Ca vs wind speed and vegetation height", xlab="u (cm/s)", ylab="Ca (cm/s)",
+  xlim=c(10, 1000), ylim=c(0.01, 100),log="xy")#plot
+legend("topleft", legend = z[1:8], col=1:8, pch=1) #  legend
+```
+
+## Penman-montieth model
+This model authored by Naomi Tague and edited by me (Elad Dente)
+It uses the output of the canopy conductance and atmospheric conductance models.
+Be aware to change units of the atmospheric conductance (cm to mm).
+day time was set to be 11 hours as default (Israeli winter) 
+```{r}
+#' Penman Montieth Equation
+#' 
+#' THis function computer evapotranspiration based on radiation, conductance etc
+#' 
+
+#' @param        Tair    (deg C) air temperature
+#' @param    vpd     (Pa)    vapour pressure deficit
+#' @param     Rnet    (j/m2/day)      net radiation
+#' @param     gs      (mm/s)  surface conductance
+#' @param     ga      (mm/s)  aerodynamic conductance
+#' @param     CP  =      1010.0 (J/kg*K) specific heat of air
+#' @param    Pair = 101325 (Pa)
+#' @author Naomi (edited by Elad Dente)
+#' @return ET (W/m^2),Evapotranspiration (m/s), Evapotranspiration (mm/day)
+ 
+ 
+penman_montieth =
+function(Tair, vpd, Rnet, gs,ga, dayl=11, CP=1010, Pair=101325) {
+  
+  #       Internal Variables
+  #
+  #       rho     (kg/m3)         density of air
+  #       CP      (K/jg/degC)     specific heat of air
+  #       lhvap   (J/kg)          latent heat of vapourization H20
+  #       s       (Pa/degC)       slope of sat vpd vs T curve
+  #       rs      (s/m)   surface resistance
+  #       ra      (s/m)   aerodynamic resistance
+  
+
+  # convert Rnet to daytime value in j/m2/s
+  Rnet = Rnet / (60*60*dayl)
+  
+  # convert conductance to resistance and change units
+  rs = 1000.0/gs
+  ra = 1000.0/ga
+  
+  # Assign tk (Kelvins)
+  tk = Tair + 273.15
+  
+  #       Density of air (rho) as a fn. of air temp.
+  rho = 1.292 * ( 0.00428 * Tair )
+  
+  #       Latent heat of vapourization as a fn. of Tair.
+  lhvap = 2.5023e6 - 2430.54 * Tair
+  
+  #       Temperature offsets for slope estimates
+  dt = 0.2
+  t1 = Tair + dt
+  t2 = Tair - dt
+  
+  #       Saturation vapour pressures at t1 and t2(Pa)
+  pvs1 = 610.7 * exp(17.38 * t1 / ( 239.0 + t1))
+  pvs2 = 610.7 * exp(17.38 * t2 / ( 239.0 + t2))
+  
+  #       Slope of pvs vs T curve at Tair (Pa/deg C)
+  s = ( pvs1 -   pvs2 ) / ( t1 -  t2 )
+  
+  #       Calculate gamma
+  gamma = CP * Pair / ( lhvap )
+  
+  
+  #       Evaporation in W/m2
+  et = ((s*Rnet) + (rho*CP*vpd/ra)) / (gamma*(1.0 + rs/ra) +s)
+  
+  
+  #       mH20/s = W/m2 * 1kgH20/lhvap J * 1m3H20/1000kGH20
+  ewater = ( et/ ( lhvap * 1000 ))
+  
+  # mmH20/day
+  ewater.day = ewater * dayl*60*60 * 1000
+  
+  # return from your function
+  return(list(Evapotransiration=et,mH2O.s=ewater,mmH2O.day=ewater.day))
+}
+
+```
+
+
+
+
+### Sensitivity analysis:
+Test of the sensitivity of the model to temperature, as it changes the Tair and gs (canopy conductance model output) parameters.
+```{r}
+#Calculating ET for differnt T_i values:
+ET_res=matrix(,nrow = length(T_i), ncol = 1);
+for (i in 1:length(T_i))
+  {
+    b<-penman_montieth(Tair=T_i[i],vpd=700,Rnet=9000000, gs=Kc_res[i],ga=30)
+    ET_res[i,1]=b$mmH2O.day
+}
+#plot
+plot(T_i,ET_res,main="Evapotranspiration VS Temperature", xlab="T (deg C)", ylab="ET (mm/day)")
+```
+
+## Interception model
+This model calculates the precipitation necessary to fill canopy and stem storage, based on Gash et al. 1995, and Valente et al. 1977.
+The defaults represent values of Mediterranean Quercus ilex (evergreen oak) ecosystem according to the reference below.
+```{r}
+#' Canopy and Stem Interception Model
+#' 
+#' This model calculates the precipitation necessery to fill canopy and stem storage, based on Gash et al. 1995, and Valente et al. 1977.
+#' The defults represent values of mediterranean Quercus ilex (evergreen oak) ecosystem acording to the reference below.
+#'
+#' @usage calculate Interception for a day
+#' @param P.rate (mm/hr) is the mean precipitation rate.
+#' @param  Evap (mm) total evporation (Here we try to aplly the Penman-montieth ET.)
+#' @param P (mm) total precipitation
+#' @param c (-) canopy cover per unit area
+#' @param S (mm) canopy storage capacity  
+#' @param St (mm) trunks storage capacity
+#' @param Pt (-) the propotion of rain goes to stems
+#' @author Elad Dente
+#' @return P.canopy (mm) canopy interception, P.stem (mm) stem interception, tot_inter (mm) total interception, and prc.inter (%) precentage of interception in precipitation. .
+#' @references Limousin, J. M., Rambal, S., Ourcival, J. M., & Joffre, R. (2008). Modelling rainfall interception in a Mediterranean Quercus ilex ecosystem: lesson from a throughfall exclusion experiment. Journal of Hydrology, 357(1), 57-66.
+
+interception<-
+  function(P.rate,Evap,P,c=0.59,S=1.7,St=0.64,Pt=0.1,dayl=11){
+  
+  #       Internal Variables
+  #       Ec (mm/hr) is the mean evaporation rate. 
+  #       Sc (mm) canopy storage capcity per cover unit (S/c)
+  #       Stc (mm) stem storage capcity per cover unit (St/c)
+  #       Ptc (mm) propotion of rain goes to stemss per cover unit (Pt/c)
+  
+  #calculating Sc
+  Ec= Evap/dayl
+  #calculating Sc
+  Sc= S/c
+  #calculating Stc
+  Stc= St/c
+  #calculating Ptc
+  Ptc= Pt/c
+  
+  #calculating P.canopy
+  P.canopy=-(P.rate/Ec)*Sc*log(1-(Ec/P.rate))
+  
+  #calculating P.stem
+  P.stem=(P.rate/(P.rate-Ec))*(Stc/Ptc)
+  
+  #total interception
+  tot_inter=P.canopy+P.stem
+  
+  # % total interception from precipitation
+  prc.inter=100*tot_inter/P
+  
+  return (list(canopy_interception=P.canopy,stem_interception=P.stem,total_interception=tot_inter,inter.precentage=prc.inter))
+}
+```
+###Sensitivity analysis:
+Test of the influence of evapotranspiration.
+```{r}
+#Calculating total interception for differnt rain intensity values:
+Evap_i=seq(0,15)
+interception_res=matrix(,nrow = length(Evap_i), ncol = 2);
+for (i in 1:length(Evap_i))
+  {
+    d<-interception(P.rate=4,Evap=Evap_i[i],P=90,c=0.59,S=1.7,St=0.64,Pt=0.1,dayl=11)
+    interception_res[i,1]=d$inter.precentage
+    interception_res[i,2]=d$total_interception
+}
+#plot
+plot(Evap_i,interception_res[,1],main="Interception (as % from daily rain) VS Evapotranspiration", xlab="Evapotranspiration (mm/day)", ylab="Interception (%)")
+```
+The Stems storing a lot of water!!!
+
+##SCS method
+This function calculate the SCS method for Runoff, in atempt to use physical parameters rather the curve number of the original method.
+Here the usage is for estimation of daily runoff.
+```{r}
+#' SCS Model
+#' 
+#' This function calculate the SCS method for Runoff, in atempt to use physical parameters rather the curve number of #' the original method.
+#' Here the usage is for estimation of daily runoff
+#' 
+#'@param P (mm) daily rain.
+#'@param I (mm) daily initial abstraction (we try to use the daily interception from the interception model)
+#'@param S (-)  (from the CN number. default is 130 for CN 66)
+#'@author Elad Dente
+#'@references http://www.professorpatel.com/uploads/7/6/5/6/7656897/tr55.pdf
+#'@return Q (mm) runoff
+
+SCS=function(P,I,S=130){
+  Q=((P-I)^2)/(P-I+S)
+  
+  #IS is the I acordin to I=0.2*S
+  IS=0.2*S
+  
+  return(list(IS=IS,I=I,runoff=Q))
+}
+  
+```
+###Sensitivity analysis:
+Test of the influence of Initial abstracts (interception model output).
+```{r}
+#Calculating total interception for differnt rain intensity values:
+
+SCS_res=matrix(,nrow = length(Evap_i), ncol = 1);
+for (i in 1:length(Evap_i))
+  {
+    e<-SCS(P=90,I=interception_res[i,2],S=130)
+    SCS_res[i,1]=e$runoff
+}
+#plot
+plot(interception_res[,2],SCS_res,main="Runoff VS Interception", xlab="Interception (mm/day)", ylab="Runoff (mm)")
+```
+The intercepitatio influenced the runoff, but in small range...
+
+#Example from Kibutz Eilon Area (North-West Israel)
+In this area the vegetation carcterzied with Medditeranean shrubs and Evergreen Oaks (~3 meters height)
+The meterologic data were aquiered from the Israeli Meterological Survey and MOP-TZAFON institute
+https://ims.data.gov.il/
+http://www.mop-zafon.net/
+
+The example Below is 3 days (11-13/02/2015) of rain in winter 2015.
+The dataset file is "Eilon_dataset.csv":
+```{r}
+Eilon = read.csv("Datasets/Eilon_dataset.csv", sep=",", header=T)
+#model_res=matrix(NA,nrow = 3, ncol = 5, dimnames=list("atmo","canopy","ET","interception","SCS"))
+
+#I know it is not in the smartest way.. I was confused with the metrix command and didn't have time. sorry..
+#day1
+atmo.day1=atmo_conductance(Eilon$windspeed.m.s.[11],3)
+canopy.day1=canopy_conductance(Cleaf_max=4.8, Rnrad=Eilon$Rnrad[11], Rvpd=0.85,T, Rteta=Eilon$Rteta[11], LAI=1.61)
+ET.day1=penman_montieth(Tair=Eilon$mean_temp..degc.[11], vpd=Eilon$vpd.Pa.[11], Rnet=Eilon$Nrad.J.m2.day.[11], gs=canopy.day1$Canopy_conductance_mm.s ,ga=10*(atmo.day1$atmospheric_conductance_cm.s), dayl=11, CP=1010, Pair=101325)
+inteception.day1=interception(P.rate=Eilon$rain_rate.mm.h.[11],Evap=ET.day1$mmH2O.day,P=Eilon$rain.mm.[11],c=0.59,S=1.7,St=0.64,Pt=0.1,dayl=11)
+SCS.day1=SCS(P=Eilon$rain.mm.[11],I=inteception.day1$total_interception,S=130)
+
+#day2
+atmo.day2=atmo_conductance(Eilon$windspeed.m.s.[12],3)
+canopy.day2=canopy_conductance(Cleaf_max=4.8, Rnrad=Eilon$Rnrad[12], Rvpd=0.85,T, Rteta=Eilon$Rteta[12], LAI=1.61)
+ET.day2=penman_montieth(Tair=Eilon$mean_temp..degc.[12], vpd=Eilon$vpd.Pa.[12], Rnet=Eilon$Nrad.J.m2.day.[12], gs=canopy.day2$Canopy_conductance_mm.s ,ga=10*(atmo.day2$atmospheric_conductance_cm.s), dayl=11, CP=1010, Pair=101325)
+inteception.day2=interception(P.rate=Eilon$rain_rate.mm.h.[12],Evap=ET.day2$mmH2O.day,P=Eilon$rain.mm.[12],c=0.59,S=1.7,St=0.64,Pt=0.1,dayl=11)
+SCS.day2=SCS(P=Eilon$rain.mm.[12],I=inteception.day2$total_interception,S=130)
+
+#day3
+atmo.day3=atmo_conductance(Eilon$windspeed.m.s.[13],3)
+canopy.day3=canopy_conductance(Cleaf_max=4.8, Rnrad=Eilon$Rnrad[13], Rvpd=0.85,T, Rteta=Eilon$Rteta[13], LAI=1.61)
+ET.day3=penman_montieth(Tair=Eilon$mean_temp..degc.[13], vpd=Eilon$vpd.Pa.[13], Rnet=Eilon$Nrad.J.m2.day.[13], gs=canopy.day3$Canopy_conductance_mm.s ,ga=10*(atmo.day3$atmospheric_conductance_cm.s), dayl=11, CP=1010, Pair=101325)
+inteception.day3=interception(P.rate=Eilon$rain_rate.mm.h.[13],Evap=ET.day3$mmH2O.day,P=Eilon$rain.mm.[13],c=0.59,S=1.7,St=0.64,Pt=0.1,dayl=11)
+SCS.day3=SCS(P=Eilon$rain.mm.[13],I=inteception.day3$total_interception,S=130)
+
+model.res=matrix(,nrow=3,ncol=5)
+model.res[1,1]=Eilon$Date[11]
+model.res[2,1]=Eilon$Date[12]
+model.res[3,1]=Eilon$Date[13]
+model.res[1,2]=SCS.day1$runoff
+model.res[2,2]=SCS.day2$runoff
+model.res[3,2]=SCS.day3$runoff
+model.res[1,3]=Eilon$rain.mm.[11]
+model.res[2,3]=Eilon$rain.mm.[12]
+model.res[3,3]=Eilon$rain.mm.[13]
+model.res[1,4]=ET.day1$mmH2O.day
+model.res[2,4]=ET.day2$mmH2O.day
+model.res[3,4]=ET.day3$mmH2O.day
+#plot (model.res[,1],model.res[,c(2,3],main="Runoff in Eilon, 11-13/02/2015", xlab="day", ylab="Runoff (mm)", #type="b")
+matplot(model.res[,2:4], type = c("b"),pch=1,col = 2:4,
+main="Runoff, Rain and ET for day in the storm", xlab="day", ylab="mm")#plot
+legend("topleft", legend = c("runoff","rain", "ET"), col=2:4, pch=1) #  legend
+```
+
+
+## More anlaysis and nicer plots in next versions of this package!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
