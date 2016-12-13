@@ -9,7 +9,7 @@ calculate Interception for a day
 \arguments{
 \item{P.rate}{(mm/hr) is the mean precipitation rate.}
 
-\item{Ec}{(mm/hr) is the mean evaporation rate. Here we try to aplly the Penman-montieth ET.}
+\item{Evap}{(mm) total evporation (Here we try to aplly the Penman-montieth ET.)}
 
 \item{P}{(mm) total precipitation}
 
@@ -19,19 +19,16 @@ calculate Interception for a day
 
 \item{St}{(mm) trunks storage capacity}
 
-\item{Pt}{(-) the propotion of rain goes to stems}
+\item{Pt}{(-) the propotion of rain goes to stemflow}
 }
 \value{
 P.canopy (mm) canopy interception, P.stem (mm) stem interception, tot_inter (mm) total interception, and prc.inter (%) precentage of interception in precipitation. .
 }
 \description{
 This model calculates the precipitation necessery to fill canopy and stem storage, based on Gash et al. 1995, and Valente et al. 1977.
-The defults represent values of mediterranean Quercus ilex (evergreen oak) ecosystem acording to the reference below.
+The defults represent values of Mediterranean Quercus ilex (evergreen oak) ecosystem acording to the reference below.
 }
 \author{
 Elad Dente
-}
-\references{
-Limousin, J. M., Rambal, S., Ourcival, J. M., & Joffre, R. (2008). Modelling rainfall interception in a Mediterranean Quercus ilex ecosystem: lesson from a throughfall exclusion experiment. Journal of Hydrology, 357(1), 57-66.
 }
 

@@ -4,20 +4,18 @@
 \alias{SCS}
 \title{SCS Model}
 \usage{
-SCS(P, I, S)
+SCS(P, I)
 }
 \arguments{
 \item{P}{(mm) daily rain.}
 
 \item{I}{(mm) daily initial abstraction (we try to use the daily interception from the interception model)}
-
-\item{S}{(-)  (from the CN number. default is 130 for CN 66)}
 }
 \value{
-Q (mm) runoff
+I, S, CN and Q (all in mm)
 }
 \description{
-This function calculate the SCS method for Runoff. This function atempt to use physical parameters rather the curve number of the original method.
+This function calculate the SCS method for Runoff, in atempt to use physical parameters rather the curve number of #' the original method.
 Here the usage is for estimation of daily runoff
 }
 \author{

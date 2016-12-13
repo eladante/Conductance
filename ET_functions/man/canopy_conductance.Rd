@@ -7,18 +7,25 @@
 calculate canopy conductance, based on the Jarvis model. To be used in Penman-Montieth ET model.
 }
 \arguments{
+\item{Cleaf_max}{(mm/s) maximum stomatal contuctance .}
+
+\item{Rnrad}{(-) Relative solar radiation.}
+
+\item{Rvpd}{(-) Relative absolute-humidity deficit.}
+
 \item{T}{(deg c) air temperature at measured height above ground (0>T<40 deg C).}
+
+\item{Rteta}{(-) Relative soli moisture deficit.}
+
+\item{LAI}{(-) Leaf area index.}
+
+\item{Fs}{(-) Shelter factor.}
 }
 \value{
 Jarvis model coefficient (Jarvis_c) and canopy conductance (Kc, mm/s)
 }
 \description{
-The R in Jarvis parameters is for "relative". the valus can be taken from the plots in "Physical Hydrology: Third Edition" by S. Lawrence Dingman
-(p. 282)
-Defult values for the relative parameters are set to Rnrad=1, Rvpd=1, Rteta=1.
-Cleaf_max was set to be 5 mm/s as default, according the etimation in "Physical Hydrology: Third Edition" to "mixed covrer".
-LAI was set to 3 for "mixed cover". The range of values for this kind of vegetation is 3-6.
-Kc (canopy conductance)= Kleaf (Jarvis model. function of cleaf_max,Rnrad,Rvpd,RT and RTeta) * LAI
+The R in Jarvis parameters is for "relative". the valus can be taken from the plots and equations in "Physical Hydrology: Third Edition" by S. Lawrence Dingman (p. 282).
 }
 \author{
 Elad Dente
